@@ -294,6 +294,69 @@ if filereadable(s:local) | execute 'source ' . s:local | endif
 let g:vimwiki_list = [{'path': '~/.vimwiki/'}]
 
 " ============================================================================
+" LSP (native — Neovim 0.11+, no plugin needed)
+"   basedpyright gives <C-]> go-to-definition (Neovim points 'tagfunc' at the
+"   LSP on attach), plus K hover, completion and diagnostics. It auto-detects
+"   the project's ./.venv, so it resolves third-party deps (aiogram, etc.).
+"   Install the server once:   uv tool install basedpyright
+" ============================================================================
+lua << EOF
+-- Locate the server even if ~/.local/bin (uv's tool dir) isn't on Neovim's PATH.
+local bp = vim.fn.exepath('basedpyright-langserver')
+if bp == '' then
+  local uvbin = vim.fn.expand('~/.local/bin/basedpyright-langserver')
+  if vim.fn.executable(uvbin) == 1 then bp = uvbin end
+end
+vim.lsp.config('basedpyright', {
+  cmd = { bp ~= '' and bp or 'basedpyright-langserver', '--stdio' },
+  filetypes = { 'python' },
+  root_markers = { 'pyproject.toml', 'uv.lock', 'poetry.lock', 'setup.py', 'setup.cfg', 'requirements.txt', '.git' },
+  settings = {
+    basedpyright = {
+      analysis = { typeCheckingMode = 'standard', diagnosticMode = 'openFilesOnly' },
+    },
+  },
+})
+vim.lsp.enable('basedpyright')
+
+-- Show diagnostic messages inline on their own line(s) below the code (not just
+-- the sign). The sign column still shows E/W/I/H; `]d`/`[d` jump, `<leader>d`
+-- opens the float. Swap to `virtual_text = true` for end-of-line messages instead.
+vim.diagnostic.config({
+  virtual_lines = true,
+  underline = true,
+  severity_sort = true,
+})
+
+-- Free the `gr` prefix from Neovim's built-in LSP defaults (grr/gri/grn/gra/grt)
+-- so plain `gr` fires instantly. Rename/code-action move to <leader> maps below.
+for _, k in ipairs({ 'grr', 'gri', 'grn', 'gra', 'grt' }) do
+  pcall(vim.keymap.del, 'n', k)
+end
+
+-- Semantic go-to maps. Buffer-local on LspAttach so they only apply where a
+-- server is running (they shadow the built-in gd/gD/gi/gr only in those buffers).
+vim.api.nvim_create_autocmd('LspAttach', {
+  callback = function(ev)
+    local o = { buffer = ev.buf, silent = true }
+    vim.keymap.set('n', 'gd', vim.lsp.buf.definition, o)              -- definition
+    vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, o)            -- declaration
+    vim.keymap.set('n', 'gy', vim.lsp.buf.type_definition, o)        -- type definition
+    vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, o)         -- implementation
+    vim.keymap.set('n', 'gr', vim.lsp.buf.references, o)             -- references (quickfix)
+    vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, o)         -- rename symbol
+    vim.keymap.set({ 'n', 'x' }, '<leader>ca', vim.lsp.buf.code_action, o) -- code action
+    vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, o)   -- show diagnostic (]d/[d jump)
+  end,
+})
+
+-- Optional: ruff as a fast linter/formatter LSP. After `uv tool install ruff`,
+-- uncomment the two lines below.
+-- vim.lsp.config('ruff', { cmd = { 'ruff', 'server' }, filetypes = { 'python' } })
+-- vim.lsp.enable('ruff')
+EOF
+
+" ============================================================================
 " FILETYPES / AUTOCOMMANDS
 " ============================================================================
 au BufNewFile,BufRead *.yaml,*.yml setf yaml | let b:did_indent = 1
@@ -303,7 +366,7 @@ au FileType go set nolist
 " Per-language <F5> = run / compile.
 au FileType sml        map <F5> <esc>:!sml %<CR>
 au FileType javascript map <F5> <esc>:!node %<CR>
-au FileType python     map <F5> <esc>:!python3 %<CR>
+au FileType python     map <buffer> <F5> <esc>:call <SID>PythonRun()<CR>
 au FileType haskell    map <F5> <esc>:w<CR>:!ghci %<CR>
 au FileType lhaskell   map <F5> <esc>:!ghci %<CR>
 au FileType groovy     map <F5> <esc>:!groovy %<CR>
@@ -319,6 +382,29 @@ function! LeaderFindOrCWD()
     execute 'NERDTree'
   else
     execute 'NERDTreeFind'
+  endif
+endfunction
+
+" Python <F5> / <leader>5: run the current file with the *project's* environment
+" so third-party deps resolve (no more ModuleNotFoundError from system python3).
+" Resolution order: $VIRTUAL_ENV -> ./.venv (searched upward) -> poetry -> uv -> python3.
+function! s:PythonRun() abort
+  write
+  let l:src     = shellescape(expand('%:p'))
+  let l:dir     = expand('%:p:h')
+  let l:venv    = finddir('.venv', l:dir . ';')
+  let l:poetry  = findfile('poetry.lock', l:dir . ';')
+  let l:project = findfile('pyproject.toml', l:dir . ';')
+  if !empty($VIRTUAL_ENV)
+    execute '!' . shellescape($VIRTUAL_ENV . '/bin/python') . ' ' . l:src
+  elseif !empty(l:venv)
+    execute '!' . shellescape(fnamemodify(l:venv, ':p') . 'bin/python') . ' ' . l:src
+  elseif !empty(l:poetry)
+    execute '!cd ' . shellescape(fnamemodify(l:poetry, ':p:h')) . ' && poetry run python ' . l:src
+  elseif !empty(l:project)
+    execute '!cd ' . shellescape(fnamemodify(l:project, ':p:h')) . ' && uv run python ' . l:src
+  else
+    execute '!python3 ' . l:src
   endif
 endfunction
 
