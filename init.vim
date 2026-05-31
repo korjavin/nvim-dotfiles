@@ -33,7 +33,7 @@ endif
 call plug#begin()
 
 " --- Colorschemes ---
-Plug 'altercation/vim-colors-solarized'
+Plug 'lifepillar/vim-solarized8'      " true-color Solarized (replaces altercation/vim-colors-solarized)
 Plug 'tomasr/molokai'
 Plug 'nelstrom/vim-mac-classic-theme'
 
@@ -100,9 +100,9 @@ set splitright
 " ============================================================================
 " APPEARANCE
 " ============================================================================
+set termguicolors               " true color — kitty supports it; gives real Solarized hex
 set background=dark
-let g:solarized_termtrans=1     " avoid dark background in terminal
-silent! colorscheme solarized   " silent! so first launch (pre-PlugInstall) is quiet
+silent! colorscheme solarized8  " true-color Solarized (silent! so first launch pre-install is quiet)
 
 set linespace=4
 set list
