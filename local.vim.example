@@ -1,0 +1,7 @@
+" Template for local.vim — copy to local.vim and fill in your own secrets.
+" local.vim is gitignored and sourced by init.vim if present.
+"
+"   cp local.vim.example local.vim
+"
+" Example: pastebin-vim personal API dev key (https://pastebin.com/api).
+" let g:pastebin_api_dev_key = 'your-key-here'

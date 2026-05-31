@@ -1,0 +1,13 @@
+# vim-plug installs plugins outside the repo (~/.local/share/nvim/plugged),
+# but ignore these in case anything lands here.
+/plugged/
+/site/
+/autoload/plug.vim
+
+# Local machine-specific settings and secrets (sourced by init.vim if present)
+/local.vim
+
+# Neovim runtime / state
+/shada/
+*.swp
+*.swo
